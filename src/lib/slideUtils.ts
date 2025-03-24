@@ -1,4 +1,3 @@
-
 import pptxgen from 'pptxgenjs';
 import { jsPDF } from 'jspdf';
 import { supabase } from './supabase';
@@ -53,8 +52,11 @@ export const generatePptx = async (slideData: SlideData): Promise<Blob> => {
     const blob = await response.blob();
     const imageBuffer = await blob.arrayBuffer();
     
+    // Convert ArrayBuffer to base64 string for PPTXGen
+    const base64String = arrayBufferToBase64(imageBuffer);
+    
     contentSlide.addImage({
-      data: Buffer.from(imageBuffer), // Convert ArrayBuffer to Buffer
+      data: `data:image/png;base64,${base64String}`,
       x: 1,
       y: 2.5,
       w: 8,
@@ -68,6 +70,17 @@ export const generatePptx = async (slideData: SlideData): Promise<Blob> => {
   // Use the correct method for pptxgenjs v3.x
   return await pptx.writeFile({ fileName: 'slide.pptx' }) as unknown as Blob;
 };
+
+// Helper function to convert ArrayBuffer to base64 string
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
 
 // Generate PDF document
 export const generatePdf = async (slideData: SlideData): Promise<Blob> => {
