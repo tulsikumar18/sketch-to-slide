@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,11 +29,11 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
       // Create a unique file name
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const filePath = `whiteboard-images/${fileName}`;
+      const filePath = `${fileName}`;
 
       // Upload file to Supabase Storage
       const { data, error } = await supabase.storage
-        .from('smartboard-images')
+        .from('whiteboard-images')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
@@ -44,7 +45,7 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
 
       // Get the public URL for the uploaded file
       const { data: { publicUrl } } = supabase.storage
-        .from('smartboard-images')
+        .from('whiteboard-images')
         .getPublicUrl(filePath);
 
       // Call the parent component's onImageUpload with the file and URL

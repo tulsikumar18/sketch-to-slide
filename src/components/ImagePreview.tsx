@@ -1,11 +1,19 @@
 
 import { ProcessingStage, UploadedImage } from "@/pages/Index";
 import { motion } from "framer-motion";
-import { ZoomIn, ZoomOut, X, Download, Edit } from "lucide-react";
+import { ZoomIn, ZoomOut, X, Download, Edit, FileType, FileText } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Skeleton } from "./ui/skeleton";
+import { generatePptx, generatePdf, saveSlideToSupabase } from "@/lib/slideUtils";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ImagePreviewProps {
   image: UploadedImage;
@@ -24,6 +32,8 @@ export const ImagePreview = ({
   const [showControls, setShowControls] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editableText, setEditableText] = useState(extractedText);
+  const [isGeneratingSlides, setIsGeneratingSlides] = useState(false);
+  const [slideUrls, setSlideUrls] = useState<{ pptxUrl?: string; pdfUrl?: string }>({});
 
   const isProcessing = processingStage === "processing";
   const isComplete = processingStage === "complete";
@@ -48,6 +58,65 @@ export const ImagePreview = ({
       onExtractedTextChange(editableText);
     }
     setIsEditing(false);
+  };
+
+  const handleGenerateSlides = async () => {
+    if (!isComplete || !isTextExtracted) return;
+    
+    try {
+      setIsGeneratingSlides(true);
+      toast.info("Generating slides...", { duration: 3000 });
+      
+      // Generate PPTX
+      const pptxBlob = await generatePptx({
+        imageUrl: image.supabaseUrl || image.url,
+        extractedText: extractedText,
+        title: "Whiteboard to Slides"
+      });
+      
+      // Generate PDF
+      const pdfBlob = await generatePdf({
+        imageUrl: image.supabaseUrl || image.url,
+        extractedText: extractedText,
+        title: "Whiteboard to Slides"
+      });
+      
+      // Save to Supabase and get URLs
+      const { pptxUrl, pdfUrl } = await saveSlideToSupabase(
+        {
+          imageUrl: image.supabaseUrl || image.url,
+          extractedText: extractedText,
+          title: "Whiteboard to Slides"
+        },
+        pptxBlob,
+        pdfBlob
+      );
+      
+      setSlideUrls({ pptxUrl, pdfUrl });
+      
+      toast.success("Slides generated successfully!");
+    } catch (error) {
+      console.error("Error generating slides:", error);
+      toast.error("Failed to generate slides. Please try again.");
+    } finally {
+      setIsGeneratingSlides(false);
+    }
+  };
+  
+  const handleDownloadSlide = (type: 'pptx' | 'pdf') => {
+    const url = type === 'pptx' ? slideUrls.pptxUrl : slideUrls.pdfUrl;
+    
+    if (!url) {
+      toast.error(`No ${type.toUpperCase()} file available`);
+      return;
+    }
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `whiteboard-slides.${type}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
@@ -114,14 +183,68 @@ export const ImagePreview = ({
                   </div>
                   <h3 className="font-medium text-gray-900">Processing Complete!</h3>
                   <p className="text-sm text-gray-600">Your slides are ready to be downloaded.</p>
-                  <Button 
-                    className="w-full flex items-center justify-center gap-2" 
-                    variant="default"
-                    onClick={handleDownload}
-                  >
-                    <Download size={16} />
-                    <span>Download Slides</span>
-                  </Button>
+                  
+                  <div className="flex flex-col gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          className="w-full flex items-center justify-center gap-2" 
+                          variant="default"
+                        >
+                          <Download size={16} />
+                          <span>Download</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onClick={handleDownload}>
+                          <div className="flex items-center gap-2">
+                            <img src={image.url} className="w-4 h-4 object-cover" />
+                            <span>Original Image</span>
+                          </div>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDownloadSlide('pptx')}
+                          disabled={!slideUrls.pptxUrl}
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileType size={16} />
+                            <span>PPTX Slides</span>
+                          </div>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDownloadSlide('pdf')}
+                          disabled={!slideUrls.pdfUrl}
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText size={16} />
+                            <span>PDF Slides</span>
+                          </div>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
+                    <Button 
+                      className="w-full flex items-center justify-center gap-2" 
+                      variant="outline"
+                      onClick={handleGenerateSlides}
+                      disabled={isGeneratingSlides || !isTextExtracted}
+                    >
+                      {isGeneratingSlides ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Generating Slides...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileType size={16} />
+                          <span>Generate Slides</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </motion.div>
               </motion.div>
             )}
