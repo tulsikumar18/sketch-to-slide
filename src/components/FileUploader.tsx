@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
@@ -6,9 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Upload, RefreshCw, Image as ImageIcon } from "lucide-react";
 import { ProcessingStage } from "@/pages/Index";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 interface FileUploaderProps {
-  onImageUpload: (file: File) => void;
+  onImageUpload: (file: File, fileUrl: string) => void;
   onReset: () => void;
   disabled: boolean;
   processingStage: ProcessingStage;
@@ -17,10 +17,49 @@ interface FileUploaderProps {
 export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage }: FileUploaderProps) => {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const videoRef = useState<HTMLVideoElement | null>(null);
   const canvasRef = useState<HTMLCanvasElement | null>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const uploadToSupabase = async (file: File) => {
+    try {
+      setIsUploading(true);
+      
+      // Create a unique file name
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      const filePath = `whiteboard-images/${fileName}`;
+
+      // Upload file to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('smartboard-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      // Get the public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from('smartboard-images')
+        .getPublicUrl(filePath);
+
+      // Call the parent component's onImageUpload with the file and URL
+      onImageUpload(file, publicUrl);
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast.error('Failed to upload image. Please try again.');
+      throw error;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
@@ -34,7 +73,11 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
         return;
       }
       
-      onImageUpload(file);
+      try {
+        await uploadToSupabase(file);
+      } catch (error) {
+        console.error("Error in upload process:", error);
+      }
     }
   }, [onImageUpload]);
 
@@ -47,7 +90,7 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
     accept: {
       'image/*': []
     },
-    disabled,
+    disabled: disabled || isUploading,
     maxFiles: 1,
   });
 
@@ -66,7 +109,7 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
     }
   };
 
-  const captureImage = () => {
+  const captureImage = async () => {
     if (videoRef[0] && canvasRef[0]) {
       const video = videoRef[0];
       const canvas = canvasRef[0];
@@ -81,11 +124,16 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         // Convert canvas to file
-        canvas.toBlob((blob) => {
+        canvas.toBlob(async (blob) => {
           if (blob) {
             const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
-            onImageUpload(file);
-            stopCamera();
+            try {
+              await uploadToSupabase(file);
+              stopCamera();
+            } catch (error) {
+              console.error("Error uploading captured image:", error);
+              toast.error("Failed to upload captured image");
+            }
           }
         }, 'image/jpeg', 0.95);
       }
@@ -111,7 +159,7 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
             {...getRootProps()}
             className={`border-2 rounded-lg p-6 text-center cursor-pointer transition-all duration-200 ${
               isDragActive ? 'drag-over' : 'border-gray-200 hover:border-primary/50'
-            } ${disabled ? 'opacity-70 pointer-events-none' : ''}`}
+            } ${disabled || isUploading ? 'opacity-70 pointer-events-none' : ''}`}
           >
             <input {...getInputProps()} />
             <div className="flex flex-col items-center gap-3">
@@ -123,8 +171,12 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
                 <Upload className="h-7 w-7 text-primary" />
               </motion.div>
               <div className="space-y-1">
-                <h3 className="font-medium text-gray-800">Drag & drop image</h3>
-                <p className="text-sm text-gray-500">or click to browse files</p>
+                <h3 className="font-medium text-gray-800">
+                  {isUploading ? 'Uploading...' : 'Drag & drop image'}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {isUploading ? 'Please wait' : 'or click to browse files'}
+                </p>
               </div>
               <p className="text-xs text-gray-400 mt-2">Supports: JPG, PNG, WEBP (Max: 15MB)</p>
             </div>
@@ -136,10 +188,10 @@ export const FileUploader = ({ onImageUpload, onReset, disabled, processingStage
               size="lg" 
               className="w-full flex items-center gap-2 font-normal"
               onClick={startCamera}
-              disabled={disabled}
+              disabled={disabled || isUploading}
             >
               <Camera size={18} className="text-primary" />
-              <span>Take a photo</span>
+              <span>{isUploading ? 'Uploading...' : 'Take a photo'}</span>
             </Button>
             
             <AnimatePresence>

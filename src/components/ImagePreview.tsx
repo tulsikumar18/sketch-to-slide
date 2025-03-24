@@ -1,4 +1,3 @@
-
 import { ProcessingStage, UploadedImage } from "@/pages/Index";
 import { motion } from "framer-motion";
 import { ZoomIn, ZoomOut, X, Download } from "lucide-react";
@@ -20,6 +19,17 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
   const increaseZoom = () => setZoom(prev => Math.min(prev + 0.25, 3));
   const decreaseZoom = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
 
+  const handleDownload = () => {
+    const downloadUrl = image.supabaseUrl || image.url;
+    
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = image.file.name || 'smartboard-slide.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   return (
     <div 
       className="relative group"
@@ -35,7 +45,6 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
             }}
             className="relative will-change-transform origin-center"
           >
-            {/* Image */}
             <motion.img 
               src={image.url} 
               alt="Preview" 
@@ -45,7 +54,6 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
               transition={{ duration: 0.3 }}
             />
 
-            {/* Processing Overlay */}
             {isProcessing && (
               <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] flex items-center justify-center">
                 <div className="p-4 rounded-full bg-white/80 animate-spin-slow">
@@ -57,7 +65,6 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
               </div>
             )}
 
-            {/* Success Overlay */}
             {isComplete && (
               <motion.div 
                 initial={{ opacity: 0 }}
@@ -90,6 +97,7 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
                   <Button 
                     className="w-full flex items-center justify-center gap-2" 
                     variant="default"
+                    onClick={handleDownload}
                   >
                     <Download size={16} />
                     <span>Download Slides</span>
@@ -101,7 +109,6 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
         </div>
       </div>
 
-      {/* Zoom controls */}
       <div 
         className={`absolute bottom-4 right-4 flex gap-2 transition-opacity duration-200 ${
           showControls || isComplete ? 'opacity-100' : 'opacity-0'
@@ -125,7 +132,6 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
         </Button>
       </div>
 
-      {/* Image info */}
       <div className="absolute top-3 left-3 right-3 flex justify-between items-center">
         <div className="bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs font-medium text-gray-700 shadow-subtle">
           {image.file.name} ({Math.round(image.file.size / 1024)} KB)

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { FileUploader } from "@/components/FileUploader";
 import { ImagePreview } from "@/components/ImagePreview";
@@ -7,33 +6,51 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 // Types
 export type ProcessingStage = "idle" | "uploading" | "processing" | "complete" | "error";
 export type UploadedImage = {
   url: string;
   file: File;
+  supabaseUrl?: string;
 };
 
 const Index = () => {
   const [image, setImage] = useState<UploadedImage | null>(null);
   const [processingStage, setProcessingStage] = useState<ProcessingStage>("idle");
 
-  const handleImageUpload = async (file: File) => {
+  const handleImageUpload = async (file: File, supabaseUrl: string) => {
     try {
       setProcessingStage("uploading");
       
       // Create an object URL for the image preview
       const imageUrl = URL.createObjectURL(file);
-      setImage({ url: imageUrl, file });
+      setImage({ url: imageUrl, file, supabaseUrl });
       
-      // Simulate uploading delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      // We're already uploaded to Supabase at this point, so we can move to processing
       setProcessingStage("processing");
       
-      // Simulate processing delay
+      // Simulate processing delay (in a real app, you would process the image on the server)
       await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Store record in Supabase database
+      const { error } = await supabase
+        .from('image_uploads')
+        .insert([
+          { 
+            file_name: file.name, 
+            file_size: file.size, 
+            file_type: file.type,
+            storage_url: supabaseUrl,
+            processed: true
+          }
+        ]);
+      
+      if (error) {
+        console.error("Error storing image record:", error);
+        // We continue anyway since the image is already stored
+      }
       
       // Success
       setProcessingStage("complete");
