@@ -54,7 +54,7 @@ export const generatePptx = async (slideData: SlideData): Promise<Blob> => {
     const imageBuffer = await blob.arrayBuffer();
     
     contentSlide.addImage({
-      data: imageBuffer,
+      data: Buffer.from(imageBuffer), // Convert ArrayBuffer to Buffer
       x: 1,
       y: 2.5,
       w: 8,
@@ -65,7 +65,8 @@ export const generatePptx = async (slideData: SlideData): Promise<Blob> => {
   }
 
   // Generate and return the PPTX as a Blob
-  return pptx.writeFile({ outputType: 'blob' });
+  // Use the correct method for pptxgenjs v3.x
+  return await pptx.writeFile({ fileName: 'slide.pptx' }) as unknown as Blob;
 };
 
 // Generate PDF document
