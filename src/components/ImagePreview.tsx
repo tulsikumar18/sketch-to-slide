@@ -1,20 +1,33 @@
+
 import { ProcessingStage, UploadedImage } from "@/pages/Index";
 import { motion } from "framer-motion";
-import { ZoomIn, ZoomOut, X, Download } from "lucide-react";
+import { ZoomIn, ZoomOut, X, Download, Edit } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
+import { Skeleton } from "./ui/skeleton";
 
 interface ImagePreviewProps {
   image: UploadedImage;
   processingStage: ProcessingStage;
+  extractedText?: string;
+  onExtractedTextChange?: (text: string) => void;
 }
 
-export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
+export const ImagePreview = ({ 
+  image, 
+  processingStage, 
+  extractedText = '', 
+  onExtractedTextChange 
+}: ImagePreviewProps) => {
   const [zoom, setZoom] = useState(1);
   const [showControls, setShowControls] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableText, setEditableText] = useState(extractedText);
 
   const isProcessing = processingStage === "processing";
   const isComplete = processingStage === "complete";
+  const isTextExtracted = extractedText && extractedText.length > 0;
 
   const increaseZoom = () => setZoom(prev => Math.min(prev + 0.25, 3));
   const decreaseZoom = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
@@ -28,6 +41,13 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  };
+
+  const handleSaveText = () => {
+    if (onExtractedTextChange) {
+      onExtractedTextChange(editableText);
+    }
+    setIsEditing(false);
   };
 
   return (
@@ -108,6 +128,63 @@ export const ImagePreview = ({ image, processingStage }: ImagePreviewProps) => {
           </div>
         </div>
       </div>
+
+      {isComplete && isTextExtracted && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-6 glass-morphism p-4 rounded-xl"
+        >
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-medium text-gray-900">Extracted Text</h3>
+            {!isEditing ? (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="flex items-center gap-1" 
+                onClick={() => setIsEditing(true)}
+              >
+                <Edit size={14} />
+                <span>Edit</span>
+              </Button>
+            ) : (
+              <Button 
+                size="sm" 
+                variant="default"
+                onClick={handleSaveText}
+              >
+                Save Changes
+              </Button>
+            )}
+          </div>
+          
+          {isEditing ? (
+            <Textarea 
+              value={editableText} 
+              onChange={(e) => setEditableText(e.target.value)}
+              className="min-h-[120px]"
+              placeholder="Edit extracted text..."
+            />
+          ) : (
+            <div className="bg-white/50 p-3 rounded-md text-gray-800 min-h-[100px] text-sm whitespace-pre-wrap">
+              {extractedText}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {processingStage === "processing" && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-6 glass-morphism p-4 rounded-xl"
+        >
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-medium text-gray-900">Extracting Text...</h3>
+          </div>
+          <Skeleton className="h-24 w-full bg-white/50" />
+        </motion.div>
+      )}
 
       <div 
         className={`absolute bottom-4 right-4 flex gap-2 transition-opacity duration-200 ${

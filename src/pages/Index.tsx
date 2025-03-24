@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { FileUploader } from "@/components/FileUploader";
 import { ImagePreview } from "@/components/ImagePreview";
@@ -7,6 +8,7 @@ import { Footer } from "@/components/Footer";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import * as Tesseract from 'tesseract.js';
 
 // Types
 export type ProcessingStage = "idle" | "uploading" | "processing" | "complete" | "error";
@@ -19,6 +21,7 @@ export type UploadedImage = {
 const Index = () => {
   const [image, setImage] = useState<UploadedImage | null>(null);
   const [processingStage, setProcessingStage] = useState<ProcessingStage>("idle");
+  const [extractedText, setExtractedText] = useState<string>("");
 
   const handleImageUpload = async (file: File, supabaseUrl: string) => {
     try {
@@ -31,8 +34,19 @@ const Index = () => {
       // We're already uploaded to Supabase at this point, so we can move to processing
       setProcessingStage("processing");
       
-      // Simulate processing delay (in a real app, you would process the image on the server)
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Extract text using Tesseract.js
+      const result = await Tesseract.recognize(
+        imageUrl,
+        'eng',
+        { 
+          logger: info => {
+            console.log(info);
+          }
+        }
+      );
+      
+      // Set the extracted text
+      setExtractedText(result.data.text);
       
       // Store record in Supabase database
       const { error } = await supabase
@@ -43,7 +57,8 @@ const Index = () => {
             file_size: file.size, 
             file_type: file.type,
             storage_url: supabaseUrl,
-            processed: true
+            processed: true,
+            extracted_text: result.data.text
           }
         ]);
       
@@ -54,7 +69,7 @@ const Index = () => {
       
       // Success
       setProcessingStage("complete");
-      toast.success("Image processed successfully! Your slides are ready.");
+      toast.success("Image processed! Text extracted successfully.");
       
     } catch (error) {
       console.error("Error processing image:", error);
@@ -63,12 +78,18 @@ const Index = () => {
     }
   };
 
+  const handleExtractedTextChange = (text: string) => {
+    setExtractedText(text);
+    toast.success("Text updated successfully");
+  };
+
   const resetState = () => {
     if (image) {
       URL.revokeObjectURL(image.url);
     }
     setImage(null);
     setProcessingStage("idle");
+    setExtractedText("");
   };
 
   return (
@@ -160,7 +181,9 @@ const Index = () => {
                   {image && (
                     <ImagePreview 
                       image={image} 
-                      processingStage={processingStage} 
+                      processingStage={processingStage}
+                      extractedText={extractedText}
+                      onExtractedTextChange={handleExtractedTextChange}
                     />
                   )}
                 </motion.div>
